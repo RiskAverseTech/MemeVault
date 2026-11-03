@@ -4,7 +4,7 @@
 
 MemeVault is a lightweight Python app that runs entirely on your computer. Point it at any folder of images, tag them with custom color-coded categories, and export exactly the ones you want. Built for meme collectors, Discord hoarders, and anyone who has ever had a folder called `memes_final_v3`.
 
-> Open source by [Risk Averse Technology Company](https://github.com/riskaversetechnology) · Built for the [Create a Meme](https://www.createa.meme) community
+> Open source by [Risk Averse Technology Company](https://github.com/RiskAverseTech) · Built for the [Create a Meme](https://www.createa.meme) community
 
 ---
 
@@ -94,7 +94,7 @@ Categories are stored in the same `.memevault_data.json` file as your marks — 
 ## 📦 Installation from Source
 
 ```bash
-git clone https://github.com/riskaversetechnology/MemeVault.git
+git clone https://github.com/RiskAverseTech/MemeVault.git
 cd MemeVault
 python -m pip install flask
 python meme_vault.py --folder /your/images/folder
@@ -110,14 +110,14 @@ PRs welcome. This is intentionally kept simple — one Python file, one HTML tem
 
 ## 📄 License
 
-MIT — do whatever you want with it.
+MIT. See [LICENSE](LICENSE).
 
 ---
 
 ## 🏢 About
 
-MemeVault is an open source project by [Risk Averse Technology Company](https://riskaverse.tech) (RATC), an AI product studio.
+MemeVault is an open source project by [Risk Averse Technology Company](https://www.riskaversetechnology.company/) (RATC), an AI product studio.
 
-Other RATC open source projects: [see our GitHub](https://github.com/riskaversetechnology)
+Other RATC open source projects: [see our GitHub](https://github.com/RiskAverseTech)
 
 A [Create a Meme](https://www.createa.meme) open source project for the memer community.

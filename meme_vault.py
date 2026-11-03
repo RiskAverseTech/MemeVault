@@ -57,14 +57,13 @@ HTML = r'''<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MemeVault</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c26;
   --border: #2a2a3a; --text: #e8e8f0; --muted: #6b6b85; --radius: 8px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; }
+body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; }
 
 header {
   position: sticky; top: 0; z-index: 100;
@@ -74,14 +73,14 @@ header {
 }
 .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; }
 .logo span { color: #ff4d6d; }
-.stats { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.stats { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .stats b { color: #ffd166; }
 .header-spacer { flex: 1; }
 .search-wrap { position: relative; flex: 1; max-width: 260px; }
 .search-wrap input {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 7px 12px 7px 30px; color: var(--text);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; transition: border-color 0.2s;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; outline: none; transition: border-color 0.2s;
 }
 .search-wrap input:focus { border-color: #ff4d6d; }
 .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
@@ -94,7 +93,7 @@ header {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text);
-  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600;
   cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .btn:hover { background: var(--surface2); border-color: var(--muted); }
@@ -102,7 +101,7 @@ header {
 .btn.danger:hover { background: #ff4444; color: white; }
 .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
 .size-control { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.size-control label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.size-control label { font-size: 11px; color: var(--muted); font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 .size-control input[type=range] { width: 80px; accent-color: #ff4d6d; cursor: pointer; }
 
 .filter-bar {
@@ -113,12 +112,12 @@ header {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--border);
   background: var(--surface); color: var(--text);
-  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700;
   cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .filter-tab .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .filter-tab:hover { border-color: var(--muted); }
-.filter-count { font-size: 10px; opacity: 0.7; font-family: 'JetBrains Mono', monospace; }
+.filter-count { font-size: 10px; opacity: 0.7; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 
 .grid-wrap { padding: 16px 20px; }
 #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 7px; }
@@ -155,7 +154,7 @@ header {
 .filename-overlay {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: linear-gradient(transparent, rgba(0,0,0,0.8));
-  padding: 18px 6px 5px; font-family: 'JetBrains Mono', monospace;
+  padding: 18px 6px 5px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 10px; color: rgba(255,255,255,0.65);
   opacity: 0; transition: opacity 0.15s;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -188,13 +187,13 @@ header {
 .page-btn {
   width: 34px; height: 34px; border-radius: 6px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; transition: all 0.15s;
 }
 .page-btn:hover { background: var(--surface2); }
 .page-btn.active { background: #ff4d6d; border-color: #ff4d6d; color: white; }
 .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.page-info { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); padding: 0 6px; }
+.page-info { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); padding: 0 6px; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.88);
@@ -211,8 +210,8 @@ header {
 }
 @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.modal-filename { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-counter { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.modal-filename { flex: 1; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-counter { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .modal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 0; overflow: hidden; }
 .modal-body img { max-width: 100%; max-height: calc(90vh - 130px); object-fit: contain; border-radius: 4px; }
 .modal-footer { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
@@ -233,7 +232,7 @@ header {
 .modal-cat-btn {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 12px; border-radius: 20px; border: 1.5px solid;
-  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
 }
 
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
@@ -251,7 +250,7 @@ header {
 }
 .cat-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); flex-shrink: 0; }
 .cat-row-name { flex: 1; font-weight: 700; font-size: 13px; }
-.cat-row-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+.cat-row-count { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); }
 .icon-btn {
   width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border);
   background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
@@ -263,7 +262,7 @@ header {
 .new-cat-form input[type=text] {
   flex: 1; min-width: 100px; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px 12px; color: var(--text);
-  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; outline: none; transition: border-color 0.2s;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; outline: none; transition: border-color 0.2s;
 }
 .new-cat-form input[type=text]:focus { border-color: #ff4d6d; }
 .new-cat-form input[type=color] {
@@ -275,11 +274,11 @@ header {
 .export-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 24px 60px rgba(0,0,0,0.7); }
 .export-box h3 { font-size: 16px; margin-bottom: 8px; }
 .export-box p { font-size: 12px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
-.field-label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
+.field-label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 .export-box input[type=text] {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 9px 12px; color: var(--text);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; margin-bottom: 14px; transition: border-color 0.2s;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; outline: none; margin-bottom: 14px; transition: border-color 0.2s;
 }
 .export-box input[type=text]:focus { border-color: #ffd166; }
 .cat-select-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
@@ -387,7 +386,7 @@ header {
       <div class="mode-opt sel" id="mode-copy" onclick="selMode('copy')">📋 Copy</div>
       <div class="mode-opt" id="mode-move" onclick="selMode('move')">✂️ Move</div>
     </div>
-    <div id="export-preview" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:14px;"></div>
+    <div id="export-preview" style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:var(--muted);margin-bottom:14px;"></div>
     <div class="dialog-actions">
       <button class="btn" onclick="closeExport()">Cancel</button>
       <button class="btn" style="border-color:#ffd166;color:#ffd166" onclick="runExport()">Export Now</button>
@@ -807,20 +806,36 @@ def api_categories():
     save_data()
     return jsonify({'ok': True})
 
+def resolve_in_folder(filename):
+    """Return the absolute path of a listed image, or None if the name is not
+    one the app itself listed or would resolve outside the image folder."""
+    if not isinstance(filename, str) or filename not in IMAGES:
+        return None
+    root = Path(IMAGE_FOLDER).resolve()
+    src = (root / filename).resolve()
+    try:
+        src.relative_to(root)
+    except ValueError:
+        return None
+    return src
+
 @app.route('/api/export', methods=['POST'])
 def api_export():
-    d = request.get_json()
-    dest = Path(d.get('dest', '').strip())
+    d = request.get_json() or {}
+    dest_raw = str(d.get('dest', '')).strip()
     mode = d.get('mode', 'copy')
     files = d.get('files', [])
+    if not dest_raw or mode not in ('copy', 'move') or not isinstance(files, list):
+        return jsonify({'success': False, 'error': 'Bad export request'})
+    dest = Path(dest_raw).expanduser()
     try:
         dest.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
     count = 0
     for filename in files:
-        src = Path(IMAGE_FOLDER) / filename
-        if not src.exists():
+        src = resolve_in_folder(filename)
+        if src is None or not src.is_file():
             continue
         try:
             if mode == 'move':
