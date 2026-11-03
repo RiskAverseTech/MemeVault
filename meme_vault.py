@@ -3,24 +3,82 @@
 MemeVault - Local Image Browser & Curation Tool
 Run: python meme_vault.py --folder /path/to/your/images
 Then open: http://localhost:5000
+
+Add --recursive to include subfolders, and --lan to reach the vault from a
+phone on the same Wi-Fi (prints a one-time URL; nothing leaves your network).
 """
 
 import os
+import re
 import sys
 import json
 import shutil
+import socket
+import secrets
+import hashlib
 import argparse
 from pathlib import Path
-from flask import Flask, request, jsonify, send_from_directory, render_template_string
+from flask import Flask, request, jsonify, send_file, render_template_string, redirect, abort, make_response
+from werkzeug.utils import secure_filename
+
+VERSION = '0.2.0'
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 512 * 1024 * 1024  # per upload request
 
 IMAGE_FOLDER = None
 DATA_FILE = None
+CACHE_DIR = None          # converted HEIC previews live here, inside the image folder
 DATA = {}
 IMAGES = []
+IMAGE_SET = set()
+RECURSIVE = False
+LAN_MODE = False
+TOKEN = None
+ALLOWED_HOSTS = {'localhost', '127.0.0.1', '::1', '[::1]'}
 
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.avif'}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.avif',
+                    '.svg', '.heic', '.heif'}
+HEIC_EXTENSIONS = {'.heic', '.heif'}
+MIME_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
+              '.webp': 'image/webp', '.bmp': 'image/bmp', '.tiff': 'image/tiff', '.avif': 'image/avif',
+              '.svg': 'image/svg+xml', '.heic': 'image/jpeg', '.heif': 'image/jpeg'}
+
+try:
+    from PIL import Image
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    HEIC_OK = True
+except Exception:
+    HEIC_OK = False
+
+# Files saved from the web often carry a URL tail after the real extension,
+# e.g. "photo.jpg%3alarge" or "photo.jpg:large" from X/Twitter. The logical
+# extension is what comes before that tail.
+_TAIL = re.compile(r'(%3a|:|\?|%3f|#)', re.IGNORECASE)
+
+def logical_ext(name):
+    base = Path(name).name
+    head = _TAIL.split(base, maxsplit=1)[0]
+    return Path(head).suffix.lower()
+
+def is_listable(path):
+    ext = logical_ext(path.name)
+    if ext not in IMAGE_EXTENSIONS:
+        return False
+    if ext in HEIC_EXTENSIONS and not HEIC_OK:
+        return False
+    return True
+
+def lan_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))   # no packet is sent; picks the outbound interface
+        return s.getsockname()[0]
+    except Exception:
+        return '127.0.0.1'
+    finally:
+        s.close()
 
 DEFAULT_CATEGORIES = [
     {"id": "fave",  "name": "Fave",   "color": "#ff4d6d"},
@@ -29,13 +87,26 @@ DEFAULT_CATEGORIES = [
 ]
 
 def load_images():
-    global IMAGES
+    global IMAGES, IMAGE_SET
     folder = Path(IMAGE_FOLDER)
-    IMAGES = sorted([
-        f.name for f in folder.iterdir()
-        if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
-    ])
-    print(f"✓ Found {len(IMAGES)} images in {IMAGE_FOLDER}")
+    found, skipped_heic = [], 0
+    if RECURSIVE:
+        walker = (p for p in folder.rglob('*')
+                  if not any(part.startswith('.') for part in p.relative_to(folder).parts))
+    else:
+        walker = folder.iterdir()
+    for f in walker:
+        if not f.is_file() or f.name.startswith('.'):
+            continue
+        if is_listable(f):
+            found.append(f.relative_to(folder).as_posix())
+        elif logical_ext(f.name) in HEIC_EXTENSIONS:
+            skipped_heic += 1
+    IMAGES = sorted(found)
+    IMAGE_SET = set(IMAGES)
+    print(f"✓ Found {len(IMAGES)} images in {IMAGE_FOLDER}" + (" (including subfolders)" if RECURSIVE else ""))
+    if skipped_heic:
+        print(f"  {skipped_heic} HEIC/HEIF files skipped: run  python -m pip install pillow pillow-heif  to include them")
 
 def load_data():
     global DATA
@@ -306,6 +377,25 @@ header {
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius); padding: 26px 16px; text-align: center;
+  color: var(--muted); font-size: 13px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.2s;
+}
+.drop-zone.over, .drop-zone:hover { border-color: #06d6a0; color: var(--text); }
+.drop-zone input { display: none; }
+#upload-log { font-family: ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size: 11px; color: var(--muted); margin-bottom: 14px; max-height: 140px; overflow: auto; white-space: pre-wrap; }
+.lan-badge { border: 1px solid #06d6a0; color: #06d6a0; border-radius: 4px; padding: 1px 6px; font-size: 10px; margin-left: 6px; }
+
+@media (max-width: 640px) {
+  header { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
+  .header-spacer { display: none; }
+  .search-wrap { max-width: none; flex-basis: 100%; }
+  .toolbar { padding: 8px 12px; }
+  .grid-wrap { padding: 10px; }
+  #grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important; }
+  .size-control { display: none; }
+}
 </style>
 </head>
 <body>
@@ -327,6 +417,7 @@ header {
   <button class="btn danger" onclick="clearAllMarks()">✕ Clear All</button>
   <div class="sep"></div>
   <button class="btn" style="border-color:#ffd166;color:#ffd166" onclick="openExport()">📁 Export</button>
+  <button class="btn" style="border-color:#06d6a0;color:#06d6a0" onclick="openUpload()">📱 Add Images</button>
   <div class="size-control">
     <label>SIZE</label>
     <input type="range" min="100" max="320" value="180" oninput="setThumbSize(this.value)">
@@ -394,6 +485,25 @@ header {
   </div>
 </div>
 
+<!-- UPLOAD DIALOG -->
+<div class="dialog-overlay" id="upload-dialog">
+  <div class="export-box">
+    <h3>📱 Add Images</h3>
+    <p id="upload-intro">Pick photos from this device. They are copied into the vault folder on the computer running MemeVault and nowhere else.</p>
+    <label class="drop-zone" id="drop-zone" for="upload-input"
+      ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+      ondrop="event.preventDefault();this.classList.remove('over');queueFiles(event.dataTransfer.files)">
+      Tap to choose photos, or drop them here
+      <input type="file" id="upload-input" accept="image/*,.heic,.heif,.svg" multiple onchange="queueFiles(this.files)">
+    </label>
+    <div id="upload-log"></div>
+    <div class="dialog-actions">
+      <button class="btn" onclick="closeUpload()">Close</button>
+      <button class="btn" id="upload-go" style="border-color:#06d6a0;color:#06d6a0" onclick="runUpload()" disabled>Add 0 files</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -405,12 +515,16 @@ let currentPage = 1, modalIndex = -1;
 let exportMode = 'copy', exportSelectedCats = new Set();
 let openPickerImg = null;
 
+let status = { lan: false, heic: true };
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
 async function init() {
-  const [ir, dr] = await Promise.all([fetch('/api/images'), fetch('/api/data')]);
+  const [ir, dr, sr] = await Promise.all([fetch('/api/images'), fetch('/api/data'), fetch('/api/status')]);
   allImages = await ir.json();
   const d = await dr.json();
   categories = d.categories;
   marks = d.marks;
+  status = await sr.json();
   renderFilterBar();
   applyFilters();
   updateStats();
@@ -419,7 +533,8 @@ async function init() {
 function updateStats() {
   const total = Object.keys(marks).length;
   document.getElementById('stats-text').innerHTML =
-    '<b>' + allImages.length + '</b> images &nbsp;·&nbsp; <b>' + total + '</b> marked';
+    '<b>' + allImages.length + '</b> images &nbsp;·&nbsp; <b>' + total + '</b> marked'
+    + (status.lan ? '<span class="lan-badge" title="Reachable on your local network">LAN</span>' : '');
 }
 
 function renderFilterBar() {
@@ -488,7 +603,7 @@ function renderPage() {
       + '<div class="img-wrap">'
       + '<img src="/img/' + encodeURIComponent(img) + '" alt="" loading="lazy" class="loading" onload="this.classList.replace(\'loading\',\'loaded\')" onerror="this.style.display=\'none\'">'
       + '<div class="cat-dots">' + dots + '</div>'
-      + '<div class="filename-overlay">' + img + '</div>'
+      + '<div class="filename-overlay">' + esc(img) + '</div>'
       + '</div>'
       + '<div class="heart-btn" onclick="event.stopPropagation();togglePicker(event,\'' + safeImg + '\')">♥</div>'
       + '<div class="cat-picker" id="picker-' + i + '">' + renderPickerHTML(img) + '</div>'
@@ -724,6 +839,46 @@ async function runExport() {
   }
 }
 
+// UPLOAD
+let uploadQueue = [];
+function openUpload() {
+  uploadQueue = [];
+  document.getElementById('upload-log').textContent = status.heic ? '' :
+    'Note: HEIC photos need pillow-heif installed on the computer running MemeVault; others upload fine.';
+  document.getElementById('upload-go').disabled = true;
+  document.getElementById('upload-go').textContent = 'Add 0 files';
+  document.getElementById('upload-dialog').classList.add('open');
+}
+function closeUpload() { document.getElementById('upload-dialog').classList.remove('open'); }
+function queueFiles(list) {
+  uploadQueue = Array.from(list || []);
+  const names = uploadQueue.map(f => f.name).slice(0, 20).join('\n') + (uploadQueue.length > 20 ? '\n…' : '');
+  document.getElementById('upload-log').textContent = names;
+  const go = document.getElementById('upload-go');
+  go.disabled = uploadQueue.length === 0;
+  go.textContent = 'Add ' + uploadQueue.length + ' file' + (uploadQueue.length === 1 ? '' : 's');
+}
+async function runUpload() {
+  if (!uploadQueue.length) return;
+  const go = document.getElementById('upload-go');
+  go.disabled = true; go.textContent = 'Uploading…';
+  const fd = new FormData();
+  uploadQueue.forEach(f => fd.append('files', f, f.name));
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    const lines = data.saved.map(n => '✓ ' + n).concat(data.rejected.map(r => '✕ ' + r.name + ' — ' + r.reason));
+    document.getElementById('upload-log').textContent = lines.join('\n');
+    toast(data.saved.length ? '✓ Added ' + data.saved.length + ' image' + (data.saved.length === 1 ? '' : 's') : 'Nothing added', data.saved.length ? 'ok' : 'err');
+    uploadQueue = [];
+    document.getElementById('upload-input').value = '';
+    go.textContent = 'Add 0 files';
+    if (data.saved.length) await init();
+  } catch (e) {
+    toast('Upload failed: ' + e, 'err'); go.disabled = false;
+  }
+}
+
 // PAGINATION
 function renderPagination() {
   const total = Math.ceil(filteredImages.length / PAGE_SIZE);
@@ -764,13 +919,66 @@ init();
 </body>
 </html>'''
 
+@app.before_request
+def guard():
+    # Refuse requests whose Host header is not one of ours. A page from
+    # another origin that rebinds its DNS name to this machine would otherwise
+    # be able to drive the export and upload routes.
+    host = request.host.rsplit(':', 1)[0] if not request.host.startswith('[') else request.host.split(']')[0] + ']'
+    if host not in ALLOWED_HOSTS:
+        abort(403)
+    if not LAN_MODE:
+        return None
+    # LAN mode: every request needs the one-time token, first in the URL the
+    # terminal printed, afterwards in a cookie set from it.
+    supplied = request.args.get('t')
+    if supplied and secrets.compare_digest(supplied, TOKEN):
+        if request.method == 'GET' and request.path == '/':
+            resp = make_response(redirect('/'))
+            resp.set_cookie('memevault_token', TOKEN, httponly=True, samesite='Strict', max_age=12 * 3600)
+            return resp
+        return None
+    cookie = request.cookies.get('memevault_token', '')
+    if cookie and secrets.compare_digest(cookie, TOKEN):
+        return None
+    if request.path == '/':
+        return ('<p style="font-family:system-ui;padding:2em">MemeVault is in LAN mode. '
+                'Open the exact link printed in the terminal where it is running.</p>'), 403
+    abort(403)
+
 @app.route('/')
 def index():
     return render_template_string(HTML)
 
+def heic_preview(src):
+    """Convert a HEIC/HEIF file to a cached JPEG and return the cache path."""
+    key = hashlib.sha1(f"{src}|{src.stat().st_mtime_ns}|{src.stat().st_size}".encode()).hexdigest()
+    out = Path(CACHE_DIR) / f"{key}.jpg"
+    if not out.exists():
+        Path(CACHE_DIR).mkdir(exist_ok=True)
+        with Image.open(src) as im:
+            im = im.convert('RGB')
+            im.thumbnail((2048, 2048))
+            im.save(out, 'JPEG', quality=88)
+    return out
+
 @app.route('/img/<path:filename>')
 def serve_image(filename):
-    return send_from_directory(IMAGE_FOLDER, filename)
+    src = resolve_in_folder(filename)
+    if src is None or not src.is_file():
+        abort(404)
+    ext = logical_ext(src.name)
+    if ext in HEIC_EXTENSIONS:
+        src = heic_preview(src)
+    resp = make_response(send_file(src, mimetype=MIME_TYPES.get(ext, 'application/octet-stream'), conditional=True))
+    # An SVG opened directly is a document; this stops any script inside it.
+    resp.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'"
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
+
+@app.route('/api/status')
+def api_status():
+    return jsonify({'version': VERSION, 'lan': LAN_MODE, 'recursive': RECURSIVE, 'heic': HEIC_OK})
 
 @app.route('/api/images')
 def api_images():
@@ -782,7 +990,7 @@ def api_data():
 
 @app.route('/api/mark', methods=['POST'])
 def api_mark():
-    d = request.get_json()
+    d = request.get_json(silent=True) or {}
     filename = d.get('filename')
     cats = d.get('cats', [])
     if filename:
@@ -795,21 +1003,21 @@ def api_mark():
 
 @app.route('/api/marks/batch', methods=['POST'])
 def api_batch():
-    d = request.get_json()
+    d = request.get_json(silent=True) or {}
     DATA['marks'] = {k: v for k, v in d.get('marks', {}).items() if v}
     save_data()
     return jsonify({'ok': True})
 
 @app.route('/api/categories', methods=['POST'])
 def api_categories():
-    DATA['categories'] = request.get_json().get('categories', [])
+    DATA['categories'] = (request.get_json(silent=True) or {}).get('categories', [])
     save_data()
     return jsonify({'ok': True})
 
 def resolve_in_folder(filename):
     """Return the absolute path of a listed image, or None if the name is not
     one the app itself listed or would resolve outside the image folder."""
-    if not isinstance(filename, str) or filename not in IMAGES:
+    if not isinstance(filename, str) or filename not in IMAGE_SET:
         return None
     root = Path(IMAGE_FOLDER).resolve()
     src = (root / filename).resolve()
@@ -837,23 +1045,79 @@ def api_export():
         src = resolve_in_folder(filename)
         if src is None or not src.is_file():
             continue
+        target = dest / filename
         try:
+            target.parent.mkdir(parents=True, exist_ok=True)
             if mode == 'move':
-                shutil.move(str(src), str(dest / filename))
-                if filename in IMAGES:
-                    IMAGES.remove(filename)
+                shutil.move(str(src), str(target))
+                IMAGES.remove(filename)
+                IMAGE_SET.discard(filename)
+                DATA['marks'].pop(filename, None)
             else:
-                shutil.copy2(str(src), str(dest / filename))
+                shutil.copy2(str(src), str(target))
             count += 1
         except Exception:
             pass
     save_data()
     return jsonify({'success': True, 'count': count})
 
+# ---- uploads (from a phone in LAN mode, or drag-and-drop on the desktop) ----
+def sniff_ok(ext, head, text_head):
+    """True if the first bytes look like the type the extension claims."""
+    if ext in ('.jpg', '.jpeg'): return head[:3] == b'\xff\xd8\xff'
+    if ext == '.png':  return head[:8] == b'\x89PNG\r\n\x1a\n'
+    if ext == '.gif':  return head[:6] in (b'GIF87a', b'GIF89a')
+    if ext == '.webp': return head[:4] == b'RIFF' and head[8:12] == b'WEBP'
+    if ext == '.bmp':  return head[:2] == b'BM'
+    if ext == '.tiff': return head[:4] in (b'II*\x00', b'MM\x00*')
+    if ext in ('.avif', '.heic', '.heif'): return head[4:8] == b'ftyp'
+    if ext == '.svg':
+        t = text_head.lower()
+        return '<svg' in t and '<script' not in t and 'javascript:' not in t and 'onload=' not in t
+    return False
+
+def unique_target(folder, name):
+    stem, suffix = Path(name).stem, Path(name).suffix
+    candidate, n = folder / name, 1
+    while candidate.exists():
+        candidate = folder / f"{stem}-{n}{suffix}"
+        n += 1
+    return candidate
+
+@app.route('/api/upload', methods=['POST'])
+def api_upload():
+    saved, rejected = [], []
+    for f in request.files.getlist('files'):
+        original = f.filename or ''
+        name = secure_filename(original)
+        ext = logical_ext(name) if name else ''
+        if not name or ext not in IMAGE_EXTENSIONS:
+            rejected.append({'name': original, 'reason': 'not an image type MemeVault accepts'})
+            continue
+        if ext in HEIC_EXTENSIONS and not HEIC_OK:
+            rejected.append({'name': original, 'reason': 'HEIC needs pillow-heif on the computer running MemeVault'})
+            continue
+        head = f.stream.read(4096)
+        f.stream.seek(0)
+        if not sniff_ok(ext, head, head.decode('latin-1', 'replace')):
+            rejected.append({'name': original, 'reason': 'contents do not match the file type'})
+            continue
+        target = unique_target(Path(IMAGE_FOLDER), name)
+        f.save(target)
+        saved.append(target.name)
+    if saved:
+        load_images()
+        save_data()
+    return jsonify({'ok': True, 'saved': saved, 'rejected': rejected})
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MemeVault')
     parser.add_argument('--folder', '-f', required=True, help='Path to images folder')
     parser.add_argument('--port', '-p', type=int, default=5000)
+    parser.add_argument('--recursive', '-r', action='store_true', help='Include images in subfolders')
+    parser.add_argument('--lan', action='store_true',
+                        help='Also listen on your local network so a phone on the same Wi-Fi can open the vault '
+                             'and add photos. Prints a one-time link; keep it private.')
     args = parser.parse_args()
 
     IMAGE_FOLDER = os.path.abspath(args.folder)
@@ -862,12 +1126,33 @@ if __name__ == '__main__':
         sys.exit(1)
 
     DATA_FILE = os.path.join(IMAGE_FOLDER, '.memevault_data.json')
+    CACHE_DIR = os.path.join(IMAGE_FOLDER, '.memevault_cache')
+    RECURSIVE = args.recursive
+    LAN_MODE = args.lan
     load_images()
     load_data()
 
-    print(f"\n🎮 MemeVault running!")
+    print(f"\n🎮 MemeVault {VERSION} running!")
     print(f"   Folder : {IMAGE_FOLDER}")
     print(f"   Data   : {DATA_FILE}")
-    print(f"   Open   : http://localhost:{args.port}\n")
-
-    app.run(debug=False, port=args.port, host='127.0.0.1')
+    if not HEIC_OK:
+        print(f"   HEIC   : off (python -m pip install pillow pillow-heif to view iPhone photos)")
+    if LAN_MODE:
+        TOKEN = secrets.token_urlsafe(24)
+        ip = lan_ip()
+        ALLOWED_HOSTS.add(ip)
+        url = f"http://{ip}:{args.port}/?t={TOKEN}"
+        print(f"   Open   : http://localhost:{args.port}/?t={TOKEN}")
+        print(f"   Phone  : {url}")
+        print(f"            Same Wi-Fi only. Anyone with this link can see and add to the folder;")
+        print(f"            it stops working when you quit. Nothing leaves your network.")
+        try:
+            import qrcode
+            q = qrcode.QRCode(border=1); q.add_data(url); q.make(); q.print_ascii(invert=True)
+        except Exception:
+            print(f"            (python -m pip install qrcode  to also show this as a QR code)")
+        print()
+        app.run(debug=False, port=args.port, host='0.0.0.0')
+    else:
+        print(f"   Open   : http://localhost:{args.port}\n")
+        app.run(debug=False, port=args.port, host='127.0.0.1')

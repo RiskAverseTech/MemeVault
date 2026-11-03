@@ -16,19 +16,23 @@ MemeVault is a lightweight Python app that runs entirely on your computer. Point
 - **Filter by category** — instantly see only the images tagged a certain way
 - **Filename search** — filter by name in real time
 - **Click to zoom** — any image opens in a full modal with prev/next navigation and keyboard shortcuts
+- **Works on a phone screen** — the grid, toolbar and dialogs rearrange below 640px
 - **Export marked images** — pick which categories to export, choose a destination folder, copy or move
 - **Persistent marks** — everything saves to a `.memevault_data.json` file in your images folder automatically
-- **Zero data leaves your machine** — runs on `localhost:5000`, nothing is uploaded anywhere
+- **Reads what your folder actually holds** — jpg, png, gif, webp, bmp, tiff, avif, svg, and the `photo.jpg%3alarge` names that downloads from X leave behind; iPhone HEIC too with one optional package; `--recursive` includes subfolders
+- **Add photos from your phone** — opt-in `--lan` mode prints a one-time link; open it on a phone on the same Wi-Fi and use **📱 Add Images** to copy photos straight into the folder
+- **Zero data leaves your machine** — runs on `localhost:5000` by default and talks to no outside server, ever. With `--lan` on, nothing leaves your local network
 
 ---
 
 ## 🚀 Quick Start
 
-**Requirements:** Python 3.8+ · Flask
+**Requirements:** Python 3.8+ · Flask. Optional: Pillow + pillow-heif for iPhone HEIC photos, qrcode for a scannable link in `--lan` mode.
 
 ```bash
-# 1. Install Flask (one time)
+# 1. Install Flask (one time). Add the optional packages if you want them.
 python -m pip install flask
+python -m pip install pillow pillow-heif qrcode   # optional
 
 # 2. Run MemeVault pointed at your images folder
 python meme_vault.py --folder /path/to/your/images
@@ -38,6 +42,57 @@ python meme_vault.py --folder /path/to/your/images
 ```
 
 On Mac you can drag your images folder from Finder into the terminal after `--folder ` to auto-fill the path.
+
+| Flag | What it does |
+|---|---|
+| `--folder PATH` | The images folder. Required. Marks are saved there in `.memevault_data.json`. |
+| `--port N` | Port to listen on. Default 5000. |
+| `--recursive` | Include images in subfolders. Marks are keyed by the relative path. |
+| `--lan` | Also listen on your local network so a phone can open the vault and add photos. See below. |
+
+### Formats
+
+MemeVault lists jpg, jpeg, png, gif, webp, bmp, tiff, avif and svg. Files whose
+name carries a URL tail after the real extension, like `photo.jpg%3alarge` or
+`photo.jpg:large` from X/Twitter downloads, are recognised by the extension in
+front of the tail. HEIC and HEIF (the iPhone default) are listed when Pillow and
+pillow-heif are installed; MemeVault converts them to JPEG for display on the
+fly and keeps the converted copies in `.memevault_cache` inside your folder. The
+originals are never modified. Without pillow-heif, HEIC files are skipped and the
+startup message says how many.
+
+### Phone photos: `--lan` mode
+
+Most memes live on a phone. `--lan` is how they get into the vault without a
+cloud in between.
+
+```bash
+python meme_vault.py --folder /path/to/your/images --lan
+```
+
+MemeVault then also listens on your local network and prints a link containing
+a random one-time token (and a QR code if `qrcode` is installed). Open that link
+on a phone on the same Wi-Fi, tap **📱 Add Images**, and pick photos from the
+camera roll. They are copied into the folder on your computer and nowhere else.
+iPhones convert HEIC to JPEG when uploading through the browser, so most photos
+arrive ready to view even without pillow-heif.
+
+What the token does and does not do:
+
+- Every request needs it. Without the exact link, the phone sees a refusal and
+  the images are not served.
+- It is new on every start and dies when you quit MemeVault.
+- Anyone on your Wi-Fi who has the link can see the whole folder and add to it.
+  Treat the link like a key: do not paste it into a group chat.
+- Requests whose `Host` header is not this machine are refused, in both modes,
+  so a web page you visit elsewhere cannot steer the vault through your browser.
+- Uploads are checked: the file name is sanitised, the extension must be an
+  image type MemeVault lists, the first bytes must match that type, and SVGs
+  containing scripts are refused. Images are served with a Content-Security-Policy
+  that stops any script inside an SVG from running if one is opened directly.
+
+With `--lan` off (the default) MemeVault binds to `127.0.0.1` only and nothing
+on your network can reach it.
 
 ---
 
